@@ -1,6 +1,8 @@
 package main_test
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,15 +13,30 @@ func TestEndToEnd(t *testing.T) {
 	e := newExecutor(t)
 	defer e.close()
 
-	if err := run(e.cmd, "-h"); err != nil {
+	if err := run(nil, e.cmd, "-h"); err != nil {
 		t.Fatalf("%s help %v", e.cmd, err)
 	}
 
+	t.Run("grinfo self", func(t *testing.T) {
+		pwd, err := os.Getwd()
+		if err != nil {
+			t.Error(err)
+		}
+		p, err := filepath.Abs(filepath.Join(pwd, "../../"))
+		if err != nil {
+			t.Error(err)
+		}
+		stdin := bytes.NewBufferString(p)
+		if err := run(stdin, e.cmd); err != nil {
+			t.Error(err)
+		}
+	})
 }
 
-func run(name string, arg ...string) error {
+func run(stdin io.Reader, name string, arg ...string) error {
 	cmd := exec.Command(name, arg...)
 	cmd.Dir = "."
+	cmd.Stdin = stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -45,7 +62,7 @@ func (e *executor) init(t *testing.T) {
 	}
 	cmd := filepath.Join(dir, "grinfo")
 	// build grinfo command
-	if err := run("go", "build", "-o", cmd); err != nil {
+	if err := run(nil, "go", "build", "-o", cmd); err != nil {
 		t.Fatal(err)
 	}
 	e.dir = dir
