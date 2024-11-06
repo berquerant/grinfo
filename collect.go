@@ -2,7 +2,10 @@ package grinfo
 
 import (
 	"context"
-	"sync"
+	"errors"
+	"iter"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type Worker struct {
@@ -28,32 +31,61 @@ type Result struct {
 	Log *Log
 }
 
-func (w *Worker) Start(ctx context.Context, inC <-chan string) <-chan *Result {
+func (w *Worker) All(ctx context.Context, lines iter.Seq[string]) iter.Seq[*Result] {
+	eg, ctx := errgroup.WithContext(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+
 	var (
+		inC     = make(chan string, w.bufferSize)
 		resultC = make(chan *Result, w.bufferSize)
-		wg      sync.WaitGroup
-	)
-
-	wg.Add(w.workerNum)
-	for i := 0; i < w.workerNum; i++ {
-		go func() {
-			defer wg.Done()
-
+		worker  = func() error {
 			for repoDir := range inC {
+				if IsDone(ctx) {
+					return ctx.Err()
+				}
+
 				logger := NewLogger(NewGit(repoDir))
 				r, err := logger.Get(ctx)
+				if err != nil && errors.Is(err, context.Canceled) {
+					return err
+				}
+
 				resultC <- &Result{
 					Err: err,
 					Log: r,
 				}
 			}
-		}()
+
+			return nil
+		}
+	)
+
+	for range w.workerNum {
+		eg.Go(worker)
 	}
 
 	go func() {
-		wg.Wait()
+		defer cancel()
+
+		for line := range lines {
+			if IsDone(ctx) {
+				break
+			}
+			inC <- line
+		}
+		close(inC)
+
+		_ = eg.Wait()
 		close(resultC)
 	}()
 
-	return resultC
+	return func(yield func(*Result) bool) {
+		defer cancel()
+
+		for r := range resultC {
+			if !yield(r) {
+				return
+			}
+		}
+	}
 }

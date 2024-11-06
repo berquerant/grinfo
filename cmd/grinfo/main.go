@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -45,36 +44,22 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	var (
-		inC     = make(chan string, *bufferSize)
-		resultC = grinfo.NewWorker(*workerNum, *bufferSize).Start(ctx, inC)
-		doneC   = make(chan struct{})
-		sc      = bufio.NewScanner(os.Stdin)
-	)
-
-	go func() {
-		defer close(doneC)
-
-		for r := range resultC {
-			if err := r.Err; err != nil {
-				writeErr("%v\n", err)
-				continue
-			}
-			b, err := json.Marshal(r.Log)
-			if err != nil {
-				writeErr("%v\n", err)
-				continue
-			}
-			fmt.Printf("%s\n", b)
+	var lines grinfo.Lines
+	for r := range grinfo.NewWorker(*workerNum, *bufferSize).
+		All(ctx, lines.All(os.Stdin)) {
+		if err := r.Err; err != nil {
+			writeErr("%v\n", err)
+			continue
 		}
-	}()
-
-	for sc.Scan() {
-		inC <- sc.Text()
+		b, err := json.Marshal(r.Log)
+		if err != nil {
+			writeErr("%v\n", err)
+			continue
+		}
+		fmt.Printf("%s\n", b)
 	}
-	if err := sc.Err(); err != nil {
+
+	if err := lines.Err(); err != nil {
 		writeErr("%v\n", err)
 	}
-	close(inC)
-	<-doneC
 }
