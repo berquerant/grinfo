@@ -148,7 +148,7 @@ func (g *Git) commandOutput(ctx context.Context, name string, args ...string) (s
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%w: %s", errors.Join(ErrGit, err), stderr)
+		return "", fmt.Errorf("%w: %s", errors.Join(ErrGit, err), stderr.String())
 	}
 	return strings.TrimSpace(stdout.String()), nil
 }
