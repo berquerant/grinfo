@@ -1,6 +1,7 @@
 package grinfo
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -139,11 +140,17 @@ func (g *Git) LatestTag(ctx context.Context, revision string) (string, error) {
 }
 
 func (g *Git) commandOutput(ctx context.Context, name string, args ...string) (string, error) {
-	b, err := g.command(ctx, name, args...).Output()
-	if err != nil {
-		return "", errors.Join(ErrGit, err)
+	var (
+		stdout bytes.Buffer
+		stderr bytes.Buffer
+		cmd    = g.command(ctx, name, args...)
+	)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("%w: %s", errors.Join(ErrGit, err), stderr)
 	}
-	return strings.TrimSpace(string(b)), nil
+	return strings.TrimSpace(stdout.String()), nil
 }
 
 func (g *Git) commandRun(ctx context.Context, name string, args ...string) error {

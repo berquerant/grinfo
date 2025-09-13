@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 
@@ -28,18 +30,16 @@ func Usage() {
 	flag.PrintDefaults()
 }
 
-func writeErr(format string, v ...any) {
-	fmt.Fprintf(os.Stderr, format, v...)
-}
-
 func main() {
 	var (
 		workerNum  = flag.Int("worker", 4, "")
 		bufferSize = flag.Int("buffer", 100, "")
+		debug      = flag.Bool("debug", false, "enable debug log")
 	)
 
 	flag.Usage = Usage
 	flag.Parse()
+	setupLogger(os.Stderr, *debug)
 
 	if *bufferSize < 1 {
 		*bufferSize = 1
@@ -52,18 +52,30 @@ func main() {
 	for r := range grinfo.NewWorker(*workerNum, *bufferSize).
 		All(ctx, lines.All(os.Stdin)) {
 		if err := r.Err; err != nil {
-			writeErr("%v\n", err)
+			slog.Error("from result", slog.String("error", err.Error()))
 			continue
 		}
 		b, err := json.Marshal(r.Log)
 		if err != nil {
-			writeErr("%v\n", err)
+			slog.Error("failed to marshal log", slog.String("error", err.Error()))
 			continue
 		}
 		fmt.Printf("%s\n", b)
 	}
 
 	if err := lines.Err(); err != nil {
-		writeErr("%v\n", err)
+		slog.Error("read lines", slog.String("error", err.Error()))
 	}
+}
+
+func setupLogger(w io.Writer, debug bool) {
+	level := slog.LevelInfo
+	if debug {
+		level = slog.LevelDebug
+	}
+	handler := slog.NewTextHandler(w, &slog.HandlerOptions{
+		Level: level,
+	})
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"iter"
+	"log/slog"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -43,13 +44,17 @@ func (w *Worker) All(ctx context.Context, lines iter.Seq[string]) iter.Seq[*Resu
 				if IsDone(ctx) {
 					return ctx.Err()
 				}
+				sl := slog.With(slog.String("dir", repoDir))
+				sl.Debug("start process")
 
 				logger := NewLogger(NewGit(repoDir))
 				r, err := logger.Get(ctx)
 				if err != nil && errors.Is(err, context.Canceled) {
+					sl.Debug("cancel process")
 					return err
 				}
 
+				sl.Debug("end process")
 				resultC <- &Result{
 					Err: err,
 					Log: r,
