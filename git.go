@@ -131,7 +131,11 @@ func (g *Git) RemoteOriginURL(ctx context.Context) (string, error) {
 }
 
 func (g *Git) Fetch(ctx context.Context) error {
-	return g.commandRun(ctx, "git", "fetch")
+	return g.commandRun(ctx, "git", "fetch", "--tags")
+}
+
+func (g *Git) LatestTag(ctx context.Context, revision string) (string, error) {
+	return g.commandOutput(ctx, "git", "describe", "--abbrev=0", "--tags", revision)
 }
 
 func (g *Git) commandOutput(ctx context.Context, name string, args ...string) (string, error) {

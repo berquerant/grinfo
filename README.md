@@ -8,6 +8,10 @@ Usage:
 
   grinfo [flags]
 
+Example:
+
+  echo path/to/local/repo/dir | grinfo
+
 Flags:
   -buffer int
          (default 100)

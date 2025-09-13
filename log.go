@@ -7,11 +7,12 @@ import (
 
 type (
 	Log struct {
-		URL      string      `json:"url"`
-		Dir      string      `json:"dir"`
-		TimeDiff LogTimeDiff `json:"timediff"`
-		Local    LogElement  `json:"local"`
-		Remote   LogElement  `json:"remote"`
+		URL       string      `json:"url"`
+		Dir       string      `json:"dir"`
+		Local     LogElement  `json:"local"`
+		Remote    LogElement  `json:"remote"`
+		LocalTag  *LogElement `json:"local_tag,omitempty"`
+		RemoteTag *LogElement `json:"remote_tag,omitempty"`
 	}
 
 	LogTimeDiff struct {
@@ -21,12 +22,14 @@ type (
 	}
 
 	LogElement struct {
-		Hash      string    `json:"hash"`
-		Tree      string    `json:"tree"`
-		Parent    []string  `json:"parent"`
-		Message   string    `json:"message"`
-		Author    LogMember `json:"author"`
-		Committer LogMember `json:"committer"`
+		Hash              string      `json:"hash"`
+		Tree              string      `json:"tree"`
+		Parent            []string    `json:"parent"`
+		Message           string      `json:"message"`
+		Author            LogMember   `json:"author"`
+		Committer         LogMember   `json:"committer"`
+		TimeDiffFromLocal LogTimeDiff `json:"time_diff_from_local"`
+		Tag               string      `json:"tag,omitempty"`
 	}
 
 	LogMember struct {
@@ -48,8 +51,8 @@ func NewLogger(cmd *Git) *Logger {
 	}
 }
 
-func newLogTimeDiff(local, remote *GitLogMember) LogTimeDiff {
-	d := remote.Date.Sub(local.Date)
+func newLogTimeDiff(dest, src *GitLogMember) LogTimeDiff {
+	d := dest.Date.Sub(src.Date)
 	return LogTimeDiff{
 		String: d.String(),
 		Second: int64(d.Seconds()),
@@ -57,14 +60,15 @@ func newLogTimeDiff(local, remote *GitLogMember) LogTimeDiff {
 	}
 }
 
-func newLogElement(l *GitLog) LogElement {
+func newLogElement(l, local *GitLog) LogElement {
 	return LogElement{
-		Hash:      l.Hash,
-		Tree:      l.Tree,
-		Parent:    l.Parent,
-		Message:   l.Message,
-		Author:    newLogMember(&l.Author),
-		Committer: newLogMember(&l.Committer),
+		Hash:              l.Hash,
+		Tree:              l.Tree,
+		Parent:            l.Parent,
+		Message:           l.Message,
+		Author:            newLogMember(&l.Author),
+		Committer:         newLogMember(&l.Committer),
+		TimeDiffFromLocal: newLogTimeDiff(&l.Author, &local.Author),
 	}
 }
 
@@ -79,14 +83,30 @@ func newLogMember(m *GitLogMember) LogMember {
 }
 
 func (l *Logger) Get(ctx context.Context) (*Log, error) {
+	result := &Log{
+		Dir: l.cmd.Dir,
+	}
+
 	url, err := l.cmd.RemoteOriginURL(ctx)
 	if err != nil {
 		return nil, err
 	}
+	result.URL = url
 
 	local, err := l.cmd.Log(ctx, "HEAD")
 	if err != nil {
 		return nil, err
+	}
+	result.Local = newLogElement(local, local)
+
+	if localTagName, err := l.cmd.LatestTag(ctx, local.Hash); err == nil {
+		localTag, err := l.cmd.Log(ctx, localTagName)
+		if err != nil {
+			return nil, err
+		}
+		x := newLogElement(localTag, local)
+		x.Tag = localTagName
+		result.LocalTag = &x
 	}
 
 	if err := l.cmd.Fetch(ctx); err != nil {
@@ -100,12 +120,17 @@ func (l *Logger) Get(ctx context.Context) (*Log, error) {
 	if err != nil {
 		return nil, err
 	}
+	result.Remote = newLogElement(remote, local)
 
-	return &Log{
-		URL:      url,
-		Dir:      l.cmd.Dir,
-		TimeDiff: newLogTimeDiff(&local.Author, &remote.Author),
-		Local:    newLogElement(local),
-		Remote:   newLogElement(remote),
-	}, nil
+	if remoteTagName, err := l.cmd.LatestTag(ctx, remoteHash); err == nil {
+		remoteTag, err := l.cmd.Log(ctx, remoteTagName)
+		if err != nil {
+			return nil, err
+		}
+		x := newLogElement(remoteTag, local)
+		x.Tag = remoteTagName
+		result.RemoteTag = &x
+	}
+
+	return result, nil
 }

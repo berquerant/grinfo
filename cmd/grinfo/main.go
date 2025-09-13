@@ -17,6 +17,10 @@ Usage:
 
   grinfo [flags]
 
+Example:
+
+  echo path/to/local/repo/dir | grinfo
+
 Flags:`
 
 func Usage() {
