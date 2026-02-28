@@ -13,6 +13,7 @@ type (
 		Remote    LogElement  `json:"remote"`
 		LocalTag  *LogElement `json:"local_tag,omitempty"`
 		RemoteTag *LogElement `json:"remote_tag,omitempty"`
+		Diff      LogDiff     `json:"diff"`
 	}
 
 	LogTimeDiff struct {
@@ -40,6 +41,16 @@ type (
 		Timestamp int64  `json:"timestamp"`
 	}
 
+	LogDiff struct {
+		Commit LogDiffList `json:"commit"`
+		Tag    LogDiffList `json:"tag"`
+	}
+
+	LogDiffList struct {
+		List  []string `json:"list"`
+		Count int      `json:"count"`
+	}
+
 	Logger struct {
 		cmd *Git
 	}
@@ -48,6 +59,20 @@ type (
 func NewLogger(cmd *Git) *Logger {
 	return &Logger{
 		cmd: cmd,
+	}
+}
+
+func newLogDiffList(list []string) LogDiffList {
+	return LogDiffList{
+		List:  list,
+		Count: len(list),
+	}
+}
+
+func newLogDiff(commit, tag LogDiffList) LogDiff {
+	return LogDiff{
+		Commit: commit,
+		Tag:    tag,
 	}
 }
 
@@ -131,6 +156,16 @@ func (l *Logger) Get(ctx context.Context) (*Log, error) {
 		x.Tag = remoteTagName
 		result.RemoteTag = &x
 	}
+
+	commitDiff, err := l.cmd.ListCommitDiff(ctx, local.Hash)
+	if err != nil {
+		return nil, err
+	}
+	tagDiff, err := l.cmd.ListTagDiff(ctx, local.Hash)
+	if err != nil {
+		return nil, err
+	}
+	result.Diff = newLogDiff(newLogDiffList(commitDiff), newLogDiffList(tagDiff))
 
 	return result, nil
 }

@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -139,6 +141,36 @@ func (g *Git) LatestTag(ctx context.Context, revision string) (string, error) {
 	return g.commandOutput(ctx, "git", "describe", "--abbrev=0", "--tags", revision)
 }
 
+func (g *Git) ListCommitDiff(ctx context.Context, revision string) ([]string, error) {
+	output, err := g.commandOutput(ctx, "git", "rev-list", fmt.Sprintf("%s..origin", revision))
+	if err != nil {
+		return nil, err
+	}
+	if output == "" {
+		return []string{}, nil
+	}
+	return strings.Split(output, "\n"), nil
+}
+
+func (g *Git) ListTagDiff(ctx context.Context, revision string) ([]string, error) {
+	output, err := g.commandOutput(ctx, "git", "log", "--decorate", "--oneline", fmt.Sprintf("%s..origin", revision))
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		tagRegexp = regexp.MustCompile(`tag: ([^,)]+)`)
+		result    = []string{}
+	)
+	for _, s := range strings.Split(output, "\n") {
+		vx := tagRegexp.FindAllStringSubmatch(s, -1)
+		for _, v := range vx {
+			result = append(result, v[1])
+		}
+	}
+	return result, nil
+}
+
 func (g *Git) commandOutput(ctx context.Context, name string, args ...string) (string, error) {
 	var (
 		stdout bytes.Buffer
@@ -163,5 +195,6 @@ func (g *Git) commandRun(ctx context.Context, name string, args ...string) error
 func (g *Git) command(ctx context.Context, name string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = g.Dir
+	slog.Debug("command", slog.String("dir", cmd.Dir), slog.Any("args", cmd.Args))
 	return cmd
 }
