@@ -32,9 +32,10 @@ func Usage() {
 
 func main() {
 	var (
-		workerNum  = flag.Int("worker", 4, "")
-		bufferSize = flag.Int("buffer", 100, "")
-		debug      = flag.Bool("debug", false, "enable debug log")
+		workerNum         = flag.Int("worker", 4, "")
+		bufferSize        = flag.Int("buffer", 100, "")
+		minimumReleaseAge = flag.Duration("minimum-release-age", 0, "")
+		debug             = flag.Bool("debug", false, "enable debug log")
 	)
 
 	flag.Usage = Usage
@@ -49,7 +50,7 @@ func main() {
 	defer stop()
 
 	var lines grinfo.Lines
-	for r := range grinfo.NewWorker(*workerNum, *bufferSize).
+	for r := range grinfo.NewWorker(*workerNum, *bufferSize, *minimumReleaseAge).
 		All(ctx, lines.All(os.Stdin)) {
 		if err := r.Err; err != nil {
 			slog.Error("from result", slog.String("error", err.Error()))

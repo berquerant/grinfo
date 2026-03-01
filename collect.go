@@ -5,16 +5,18 @@ import (
 	"errors"
 	"iter"
 	"log/slog"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 )
 
 type Worker struct {
-	workerNum  int
-	bufferSize int
+	workerNum         int
+	bufferSize        int
+	minimumReleaseAge time.Duration
 }
 
-func NewWorker(workerNum, bufferSize int) *Worker {
+func NewWorker(workerNum, bufferSize int, minimumReleaseAge time.Duration) *Worker {
 	if workerNum < 1 {
 		workerNum = 1
 	}
@@ -22,8 +24,9 @@ func NewWorker(workerNum, bufferSize int) *Worker {
 		bufferSize = 1
 	}
 	return &Worker{
-		workerNum:  workerNum,
-		bufferSize: bufferSize,
+		workerNum:         workerNum,
+		bufferSize:        bufferSize,
+		minimumReleaseAge: minimumReleaseAge,
 	}
 }
 
@@ -47,7 +50,7 @@ func (w *Worker) All(ctx context.Context, lines iter.Seq[string]) iter.Seq[*Resu
 				sl := slog.With(slog.String("dir", repoDir))
 				sl.Debug("start process")
 
-				logger := NewLogger(NewGit(repoDir))
+				logger := NewLogger(NewGit(repoDir), w.minimumReleaseAge)
 				r, err := logger.Get(ctx)
 				if err != nil && errors.Is(err, context.Canceled) {
 					sl.Debug("cancel process")

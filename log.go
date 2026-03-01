@@ -7,13 +7,15 @@ import (
 
 type (
 	Log struct {
-		URL       string      `json:"url"`
-		Dir       string      `json:"dir"`
-		Local     LogElement  `json:"local"`
-		Remote    LogElement  `json:"remote"`
-		LocalTag  *LogElement `json:"local_tag,omitempty"`
-		RemoteTag *LogElement `json:"remote_tag,omitempty"`
-		Diff      LogDiff     `json:"diff"`
+		URL                     string      `json:"url"`
+		Dir                     string      `json:"dir"`
+		Local                   LogElement  `json:"local"`
+		Remote                  LogElement  `json:"remote"`
+		RemoteMinimumRelease    *LogElement `json:"remote_minimum_release"`
+		LocalTag                *LogElement `json:"local_tag,omitempty"`
+		RemoteTag               *LogElement `json:"remote_tag,omitempty"`
+		RemoteTagMinimumRelease *LogElement `json:"remote_tag_minimum_release"`
+		Diff                    LogDiff     `json:"diff"`
 	}
 
 	LogTimeDiff struct {
@@ -52,13 +54,15 @@ type (
 	}
 
 	Logger struct {
-		cmd *Git
+		cmd               *Git
+		minimumReleaseAge time.Duration
 	}
 )
 
-func NewLogger(cmd *Git) *Logger {
+func NewLogger(cmd *Git, minimumReleaseAge time.Duration) *Logger {
 	return &Logger{
-		cmd: cmd,
+		cmd:               cmd,
+		minimumReleaseAge: minimumReleaseAge,
 	}
 }
 
@@ -155,6 +159,24 @@ func (l *Logger) Get(ctx context.Context) (*Log, error) {
 		x := newLogElement(remoteTag, local)
 		x.Tag = remoteTagName
 		result.RemoteTag = &x
+	}
+
+	if commit, err := l.cmd.LatestCommitWithMinimumReleaseAge(ctx, l.minimumReleaseAge); err == nil {
+		x, err := l.cmd.Log(ctx, commit)
+		if err != nil {
+			return nil, err
+		}
+		result.RemoteMinimumRelease = new(newLogElement(x, local))
+	}
+
+	if tag, err := l.cmd.LatestTagWithMinimumReleaseAge(ctx, l.minimumReleaseAge); err == nil {
+		x, err := l.cmd.Log(ctx, tag)
+		if err != nil {
+			return nil, err
+		}
+		y := newLogElement(x, local)
+		y.Tag = tag
+		result.RemoteTagMinimumRelease = &y
 	}
 
 	commitDiff, err := l.cmd.ListCommitDiff(ctx, local.Hash)

@@ -129,6 +129,22 @@ func (g *Git) LatestRemoteCommitHash(ctx context.Context, url string) (string, e
 	return xs[0], nil
 }
 
+func (g *Git) LatestCommitWithMinimumReleaseAge(ctx context.Context, minimumReleaseAge time.Duration) (string, error) {
+	t := time.Now().Add(-minimumReleaseAge)
+	return g.commandOutput(ctx, "git", "rev-list", "-n", "1",
+		fmt.Sprintf("--before=%d-%d-%d", t.Year(), t.Month(), t.Day()),
+		"origin",
+	)
+}
+
+func (g *Git) LatestTagWithMinimumReleaseAge(ctx context.Context, minimumReleaseAge time.Duration) (string, error) {
+	commit, err := g.LatestCommitWithMinimumReleaseAge(ctx, minimumReleaseAge)
+	if err != nil {
+		return "", err
+	}
+	return g.LatestTag(ctx, commit)
+}
+
 func (g *Git) RemoteOriginURL(ctx context.Context) (string, error) {
 	return g.commandOutput(ctx, "git", "config", "--get", "remote.origin.url")
 }

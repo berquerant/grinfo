@@ -14,9 +14,11 @@ Example:
 
 Flags:
   -buffer int
-         (default 100)
+    	 (default 100)
   -debug
-        enable debug log
+    	enable debug log
+  -minimum-release-age duration
+    	
   -worker int
-         (default 4)
+    	 (default 4)
 ```
