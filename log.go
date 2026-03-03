@@ -32,6 +32,7 @@ type (
 		Author            LogMember   `json:"author"`
 		Committer         LogMember   `json:"committer"`
 		TimeDiffFromLocal LogTimeDiff `json:"time_diff_from_local"`
+		TimeDiffToNow     LogTimeDiff `json:"time_diff_to_now"`
 		Tag               string      `json:"tag,omitempty"`
 	}
 
@@ -80,8 +81,8 @@ func newLogDiff(commit, tag LogDiffList) LogDiff {
 	}
 }
 
-func newLogTimeDiff(dest, src *GitLogMember) LogTimeDiff {
-	d := dest.Date.Sub(src.Date)
+func newLogTimeDiff(dest, src time.Time) LogTimeDiff {
+	d := dest.Sub(src)
 	return LogTimeDiff{
 		String: d.String(),
 		Second: int64(d.Seconds()),
@@ -89,7 +90,7 @@ func newLogTimeDiff(dest, src *GitLogMember) LogTimeDiff {
 	}
 }
 
-func newLogElement(l, local *GitLog) LogElement {
+func newLogElement(l, local *GitLog, now time.Time) LogElement {
 	return LogElement{
 		Hash:              l.Hash,
 		Tree:              l.Tree,
@@ -97,7 +98,8 @@ func newLogElement(l, local *GitLog) LogElement {
 		Message:           l.Message,
 		Author:            newLogMember(&l.Author),
 		Committer:         newLogMember(&l.Committer),
-		TimeDiffFromLocal: newLogTimeDiff(&l.Author, &local.Author),
+		TimeDiffFromLocal: newLogTimeDiff(l.Author.Date, local.Author.Date),
+		TimeDiffToNow:     newLogTimeDiff(now, l.Author.Date),
 	}
 }
 
@@ -112,6 +114,7 @@ func newLogMember(m *GitLogMember) LogMember {
 }
 
 func (l *Logger) Get(ctx context.Context) (*Log, error) {
+	now := time.Now()
 	result := &Log{
 		Dir: l.cmd.Dir,
 	}
@@ -126,14 +129,14 @@ func (l *Logger) Get(ctx context.Context) (*Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	result.Local = newLogElement(local, local)
+	result.Local = newLogElement(local, local, now)
 
 	if localTagName, err := l.cmd.LatestTag(ctx, local.Hash); err == nil {
 		localTag, err := l.cmd.Log(ctx, localTagName)
 		if err != nil {
 			return nil, err
 		}
-		x := newLogElement(localTag, local)
+		x := newLogElement(localTag, local, now)
 		x.Tag = localTagName
 		result.LocalTag = &x
 	}
@@ -149,14 +152,14 @@ func (l *Logger) Get(ctx context.Context) (*Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	result.Remote = newLogElement(remote, local)
+	result.Remote = newLogElement(remote, local, now)
 
 	if remoteTagName, err := l.cmd.LatestTag(ctx, remoteHash); err == nil {
 		remoteTag, err := l.cmd.Log(ctx, remoteTagName)
 		if err != nil {
 			return nil, err
 		}
-		x := newLogElement(remoteTag, local)
+		x := newLogElement(remoteTag, local, now)
 		x.Tag = remoteTagName
 		result.RemoteTag = &x
 	}
@@ -166,7 +169,7 @@ func (l *Logger) Get(ctx context.Context) (*Log, error) {
 		if err != nil {
 			return nil, err
 		}
-		result.RemoteMinimumRelease = new(newLogElement(x, local))
+		result.RemoteMinimumRelease = new(newLogElement(x, local, now))
 	}
 
 	if tag, err := l.cmd.LatestTagWithMinimumReleaseAge(ctx, l.minimumReleaseAge); err == nil {
@@ -174,7 +177,7 @@ func (l *Logger) Get(ctx context.Context) (*Log, error) {
 		if err != nil {
 			return nil, err
 		}
-		y := newLogElement(x, local)
+		y := newLogElement(x, local, now)
 		y.Tag = tag
 		result.RemoteTagMinimumRelease = &y
 	}
