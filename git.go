@@ -178,7 +178,7 @@ func (g *Git) ListTagDiff(ctx context.Context, revision string) ([]string, error
 		tagRegexp = regexp.MustCompile(`tag: ([^,)]+)`)
 		result    = []string{}
 	)
-	for _, s := range strings.Split(output, "\n") {
+	for s := range strings.SplitSeq(output, "\n") {
 		vx := tagRegexp.FindAllStringSubmatch(s, -1)
 		for _, v := range vx {
 			result = append(result, v[1])
