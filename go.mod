@@ -1,6 +1,6 @@
 module github.com/berquerant/grinfo
 
-go 1.26.2
+go 1.27.3
 
 require golang.org/x/sync v0.23.0
 
